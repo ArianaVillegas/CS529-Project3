@@ -1,0 +1,13 @@
+name: ml
+channels:
+  - rapidsai
+  - conda-forge
+  - nvidia
+  - nodefaults
+dependencies:
+  - numpy
+  - pytorch
+  - scipy
+  - scikit-learn
+  - pandas
+  - matplotlib
