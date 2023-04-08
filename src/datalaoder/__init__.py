@@ -1,1 +1,1 @@
-from src.datalaoder.plants import PlantsDataset
+from src.datalaoder.seed_dataset import SeedDataset
