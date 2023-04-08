@@ -32,8 +32,8 @@ def train(config, train_folder, test_folder, val_prop, model_name, mode, window_
     in_size = [3, window_size, window_size]
     out_size = [1, 12]
     if model_name == "dummy":
-        convs = [32, 64, 64, 128, 128]
-        mlp = [1024, 256]
+        convs = [8, 16, 16, 32, 64]
+        mlp = [512, 256, 64]
         model_ = DummyCNN(config, convs, mlp, in_size, out_size)
     
     callbacks = []
