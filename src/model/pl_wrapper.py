@@ -19,6 +19,7 @@ class PLWrapper(pl.LightningModule):
         x = x.float()
         x = x.view(x.shape[0], x.shape[3], x.shape[1], x.shape[2])
         y_hat = self.model(x)
+        print(y_hat.shape, y.shape)
         loss = self.loss(y_hat, y)
         self.train_acc(y_hat, y)
         self.log('loss/train_loss', loss, on_step=False, on_epoch=True)
@@ -35,6 +36,15 @@ class PLWrapper(pl.LightningModule):
         self.val_acc(y_hat, y)
         self.log('loss/val_loss', val_loss, on_step=False, on_epoch=True)
         self.log('acc/val_acc', self.val_acc, on_step=False, on_epoch=True)
+        
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        self.model.eval()
+        x, y = batch
+        x = x.float()
+        x = x.view(x.shape[0], x.shape[3], x.shape[1], x.shape[2])
+        y_hat = self.model(x)
+        y_label = torch.argmax(y_hat, dim=1)
+        return list(zip(y, y_label))
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.config["lr"])
