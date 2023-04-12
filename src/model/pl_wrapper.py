@@ -19,7 +19,6 @@ class PLWrapper(pl.LightningModule):
         x = x.float()
         x = x.view(x.shape[0], x.shape[3], x.shape[1], x.shape[2])
         y_hat = self.model(x)
-        print(y_hat.shape, y.shape)
         loss = self.loss(y_hat, y)
         self.train_acc(y_hat, y)
         self.log('loss/train_loss', loss, on_step=False, on_epoch=True)

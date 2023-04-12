@@ -1,5 +1,3 @@
-from sklearn.preprocessing import OneHotEncoder
-from pathlib import Path
 from PIL import Image
 import numpy as np
 import os
