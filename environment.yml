@@ -1,13 +1,16 @@
 name: ml
 channels:
-  - rapidsai
   - conda-forge
   - nvidia
   - nodefaults
 dependencies:
-  - numpy
-  - pytorch
-  - scipy
-  - scikit-learn
   - pandas
+  - scikit-learn
+  - numpy
   - matplotlib
+  - scipy
+  - pytorch
+  - lightning
+  - pytorch-model-summary
+  - python=3.10
+  - ray-tune
