@@ -43,7 +43,7 @@ class PLWrapper(pl.LightningModule):
         x = x.view(x.shape[0], x.shape[3], x.shape[1], x.shape[2])
         y_hat = self.model(x)
         y_label = torch.argmax(y_hat, dim=1)
-        return list(zip(y, y_label))
+        return y, y_label
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.config["lr"])

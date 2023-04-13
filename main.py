@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 import lightning.pytorch as pl
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 from ray import tune
 import pandas as pd
 import numpy as np
@@ -34,6 +35,21 @@ def augmentation(data_dir, tot_img):
         p.flip_random(probability=0.5)
         p.skew(probability=0.3)
         p.sample(tot_img - len(list_dir))
+        
+        
+def get_model(model_name, window_size):
+    in_size = [3, window_size, window_size]
+    out_size = [1, 12]
+    if model_name == "dummy":
+        convs = [16, 32, 32, 64, 64]
+        mlp = [1024, 64]
+        model_ = DummyCNN(config, convs, mlp, in_size, out_size)
+    elif model_name == "vgg":
+        model_ = torch.hub.load('pytorch/vision:v0.10.0', 'vgg11', pretrained=True)
+        model_.classifier[-1] = nn.Linear(in_features=4096, out_features=out_size[-1], bias=True)
+    else:
+        raise Exception(f"Model {model_name} not defined")
+    return model_
 
 
 def train(config, train_folder, val_prop, model_name, mode, window_size):
@@ -47,25 +63,18 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
     
     loss = nn.CrossEntropyLoss()
     
-    in_size = [3, window_size, window_size]
-    out_size = [1, 12]
-    if model_name == "dummy":
-        convs = [16, 32, 32, 64, 64]
-        mlp = [1024, 64]
-        model_ = DummyCNN(config, convs, mlp, in_size, out_size)
-    elif model_name == "vit":
-        model_ = torch.hub.load("facebookresearch/swag", model="vit_h14", pretrained=True)
-        model_.head = nn.Linear(1280, out_size[1])
-        nn.init.zeros_(model_.head.weight)
-        nn.init.zeros_(model_.head.bias)
-    
-    callbacks = [EarlyStopping(monitor="loss/val_loss", mode="min", patience=20)]
+    callbacks = [
+        EarlyStopping(monitor="loss/val_loss", mode="min", patience=20),
+        ModelCheckpoint(dirpath=os.path.join(train_folder, "../../lightning_logs"), 
+                        filename=f"{model_name}", save_top_k=1, monitor="loss/val_loss")
+    ]
     metrics = {"loss": "loss/val_loss", "acc": "acc/val_acc"}
     progress_bar = True
     if mode == "opt":
         callbacks += [_TuneReportCallback(metrics, on="validation_end")]
         progress_bar = False
     
+    model_ = get_model(model_name, window_size)
     model = PLWrapper(config, model_, loss)
     trainer = pl.Trainer(
         max_epochs=250,
@@ -108,30 +117,25 @@ def test(config, test_folder, model_name, window_size, classes):
     test_set = SeedDataset(data_dir=test_folder, mode='test', window_size=window_size)
     test_loader = DataLoader(test_set, shuffle=False, batch_size=config["batch_size"], num_workers=1)
     
-    # Create model
-    in_size = [3, window_size, window_size]
-    out_size = [1, 12]
-    if model_name == "dummy":
-        convs = [16, 32, 32, 64, 64]
-        mlp = [1024, 64]
-        model_ = DummyCNN(config, convs, mlp, in_size, out_size)
-        # Load model checkpoint
-        path = os.path.join(test_folder, '../../lightning_logs/version_0/checkpoints/epoch=110-step=72927.ckpt')
-        checkpoint = torch.load(path)
-        model_.load_state_dict(checkpoint['state_dict']['model'])
-    elif model_name == "vit":
-        model_ = torch.hub.load("facebookresearch/swag", model="vit_h14")
-        print(model_)
+    # Load model checkpoint
+    path = os.path.join(test_folder, f"../../lightning_logs/{model_name}.ckpt")
+    checkpoint = torch.load(path)
+    model_ = get_model(model_name, window_size)
+    
     loss = nn.CrossEntropyLoss()
     model = PLWrapper(config, model_, loss)
+    model.load_state_dict(checkpoint['state_dict'])
     
     # Predict test dataset
     model.eval()
     trainer = pl.Trainer()
-    preds = trainer.predict(model, test_loader)
-    preds = torch.concat(preds)
+    preds_ = trainer.predict(model, test_loader)
+    names = []
+    [names.extend(list(x)) for x, y in preds_]
+    preds = []
+    [preds.extend(np.array(y)) for x, y in preds_]
     pred_class = classes[preds]
-    df = pd.DataFrame(data={'file': test_set.get_img_names(), 'species': pred_class})
+    df = pd.DataFrame(data={'file': names, 'species': pred_class})
     df.to_csv('output.csv', index=False)
 
 
@@ -145,7 +149,7 @@ if __name__=="__main__":
             help="The relative path to the testting dataset folder")
     parser.add_argument("--val-prop", type=float, default=0.3,
             help="The validation proportion to split train and validation sets")
-    parser.add_argument("--model", type=str, default="dummy",
+    parser.add_argument("--model", type=str, choices=['dummy', 'vgg'], default="dummy",
             help="Model name")
     parser.add_argument("--mode", type=str, choices=['opt', 'train', 'aug', 'test'], default="train",
             help="Execution mode: optmization (opt) | training (train) | augmentation (aug) | testing (test)")
@@ -169,7 +173,7 @@ if __name__=="__main__":
         config = {
             "kernel_size": 3,
             "lr": 1e-3,
-            "batch_size": 4,
+            "batch_size": 16,
         }
         train(config, args.train_folder, args.val_prop, args.model, args.mode, args.window)
     elif args.mode == 'test':
@@ -177,7 +181,7 @@ if __name__=="__main__":
         config = {
             "kernel_size": 3,
             "lr": 1e-3,
-            "batch_size": 4,
+            "batch_size": 16,
         }
         test(config, args.test_folder, args.model, args.window, classes)
     else:
