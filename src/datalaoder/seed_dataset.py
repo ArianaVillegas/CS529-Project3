@@ -7,10 +7,11 @@ from torch.utils.data import Dataset
 
 
 class SeedDataset(Dataset):
-    def __init__(self, data_dir, mode='train', window_size=256):
+    def __init__(self, data_dir, mode='train', window_size=256, augmented=False):
         self.data_dir = data_dir
         self.mode = mode
         self.window_size = window_size
+        self.augmented = augmented
         self.data = []
         self._load_dir()
         
@@ -24,7 +25,10 @@ class SeedDataset(Dataset):
                     class_folder = os.path.join(self.data_dir, label)
                     list_dir = os.listdir(class_folder)
                     # Interate over images
-                    for dir_path in [class_folder, os.path.join(class_folder, 'output')]:
+                    avail = [class_folder]
+                    if self.augmented:
+                        avail.append(os.path.join(class_folder, 'output'))
+                    for dir_path in avail:
                         for name in os.listdir(dir_path):
                             if name == 'output':
                                 continue

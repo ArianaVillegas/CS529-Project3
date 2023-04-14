@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from torchvision import models
 
 import lightning.pytorch as pl
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
@@ -44,9 +45,15 @@ def get_model(model_name, window_size):
         convs = [16, 32, 32, 64, 64]
         mlp = [1024, 64]
         model_ = DummyCNN(config, convs, mlp, in_size, out_size)
-    elif model_name == "vgg":
-        model_ = torch.hub.load('pytorch/vision:v0.10.0', 'vgg11', pretrained=True)
-        model_.classifier[-1] = nn.Linear(in_features=4096, out_features=out_size[-1], bias=True)
+    elif model_name == "restnet":
+        model_ = models.resnet50(weights='IMAGENET1K_V1')
+        num_ftrs = model_.fc.in_features
+        model_.fc = torch.nn.Sequential(
+            torch.nn.Linear(num_ftrs, 256),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(0.4),
+            torch.nn.Linear(256, out_size[-1])
+        )
     else:
         raise Exception(f"Model {model_name} not defined")
     return model_
@@ -77,7 +84,7 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
     model_ = get_model(model_name, window_size)
     model = PLWrapper(config, model_, loss)
     trainer = pl.Trainer(
-        max_epochs=250,
+        max_epochs=100,
         enable_progress_bar=progress_bar,
         callbacks=callbacks)
     
@@ -130,10 +137,10 @@ def test(config, test_folder, model_name, window_size, classes):
     model.eval()
     trainer = pl.Trainer()
     preds_ = trainer.predict(model, test_loader)
-    names = []
-    [names.extend(list(x)) for x, y in preds_]
-    preds = []
-    [preds.extend(np.array(y)) for x, y in preds_]
+    names, preds = [], []
+    for x, y in preds_:
+        names.extend(list(x))
+        preds.extend(np.array(y))
     pred_class = classes[preds]
     df = pd.DataFrame(data={'file': names, 'species': pred_class})
     df.to_csv('output.csv', index=False)
@@ -149,7 +156,7 @@ if __name__=="__main__":
             help="The relative path to the testting dataset folder")
     parser.add_argument("--val-prop", type=float, default=0.3,
             help="The validation proportion to split train and validation sets")
-    parser.add_argument("--model", type=str, choices=['dummy', 'vgg'], default="dummy",
+    parser.add_argument("--model", type=str, choices=['dummy', 'restnet'], default="dummy",
             help="Model name")
     parser.add_argument("--mode", type=str, choices=['opt', 'train', 'aug', 'test'], default="train",
             help="Execution mode: optmization (opt) | training (train) | augmentation (aug) | testing (test)")
