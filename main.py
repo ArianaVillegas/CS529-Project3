@@ -49,6 +49,8 @@ def get_model(config, model_name, window_size):
         model_ = DummyCNN(config, convs, mlp, in_size, out_size)
     elif model_name == "resnet":
         model_ = models.resnet50(pretrained=True)
+        for param in model_.parameters():
+            param.requires_grad = False
         num_ftrs = model_.fc.in_features
         model_.fc = torch.nn.Sequential(
             torch.nn.Linear(num_ftrs, 256),
@@ -64,7 +66,7 @@ def get_model(config, model_name, window_size):
 def train(config, train_folder, val_prop, model_name, mode, window_size):
     # Read datasets
     meta = create_train_meta(train_folder)
-    train_meta, val_meta = train_test_split(meta, test_size=0.3, random_state=42, stratify=meta['idx'])
+    train_meta, val_meta = train_test_split(meta, test_size=val_prop, random_state=42, stratify=meta['idx'])
     train_set = SeedDataset(meta=train_meta, mode='train', window_size=window_size, augmented=True)
     val_set = SeedDataset(meta=val_meta, mode='val', window_size=window_size)
     
@@ -75,7 +77,7 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
     loss = nn.CrossEntropyLoss()
     
     callbacks = [
-        EarlyStopping(monitor="val/val_loss", mode="min", patience=20),
+        EarlyStopping(monitor="val/val_loss", mode="min", patience=10),
         ModelCheckpoint(dirpath=os.path.join(train_folder, "../../lightning_logs"), 
                         filename=f"{model_name}", save_top_k=1, monitor="val/val_loss")
     ]
@@ -129,13 +131,14 @@ def test(config, test_folder, model_name, window_size, classes):
     test_set = SeedDataset(meta=meta, mode='test', window_size=window_size)
     test_loader = DataLoader(test_set, shuffle=False, batch_size=config["batch_size"], num_workers=1)
     
+    # Build model
+    model_ = get_model(config, model_name, window_size)
+    loss = nn.CrossEntropyLoss()
+    model = PLWrapper(config, model_, loss)
+    
     # Load model checkpoint
     path = os.path.join(test_folder, f"../../lightning_logs/{model_name}.ckpt")
     checkpoint = torch.load(path)
-    model_ = get_model(config, model_name, window_size)
-    
-    loss = nn.CrossEntropyLoss()
-    model = PLWrapper(config, model_, loss)
     model.load_state_dict(checkpoint['state_dict'])
     
     # Predict test dataset
@@ -181,7 +184,6 @@ if __name__=="__main__":
     elif args.mode == 'aug':
         augmentation(args.train_folder, args.augmentation)
     elif args.mode == 'train':
-        # TODO improve to generalize for all CNN models
         config = {
             "kernel_size": 3,
             "lr": 1e-3,
@@ -189,7 +191,6 @@ if __name__=="__main__":
         }
         train(config, args.train_folder, args.val_prop, args.model, args.mode, args.window)
     elif args.mode == 'test':
-        # TODO add testing and save to csv with submission format
         config = {
             "kernel_size": 3,
             "lr": 5e-3,
