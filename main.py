@@ -47,8 +47,8 @@ def get_model(config, model_name, window_size):
         convs = [16, 32, 32, 64, 64]
         mlp = [1024, 64]
         model_ = DummyCNN(config, convs, mlp, in_size, out_size)
-    elif model_name == "restnet":
-        model_ = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+    elif model_name == "resnet":
+        model_ = models.resnet50(pretrained=True)
         num_ftrs = model_.fc.in_features
         model_.fc = torch.nn.Sequential(
             torch.nn.Linear(num_ftrs, 256),
@@ -75,11 +75,11 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
     loss = nn.CrossEntropyLoss()
     
     callbacks = [
-        EarlyStopping(monitor="loss/val_loss", mode="min", patience=20),
+        EarlyStopping(monitor="val/val_loss", mode="min", patience=20),
         ModelCheckpoint(dirpath=os.path.join(train_folder, "../../lightning_logs"), 
-                        filename=f"{model_name}", save_top_k=1, monitor="loss/val_loss")
+                        filename=f"{model_name}", save_top_k=1, monitor="val/val_loss")
     ]
-    metrics = {"loss": "loss/val_loss", "acc": "acc/val_acc"}
+    metrics = {"loss": "val/val_loss", "acc": "val/val_acc", "f1": "val/val_f1"}
     progress_bar = True
     if mode == "opt":
         callbacks += [_TuneReportCallback(metrics, on="validation_end")]
@@ -148,7 +148,7 @@ def test(config, test_folder, model_name, window_size, classes):
         preds.extend(np.array(y))
     pred_class = classes[preds]
     df = pd.DataFrame(data={'file': names, 'species': pred_class})
-    df.to_csv('output.csv', index=False)
+    df.to_csv(f'output_{model_name}.csv', index=False)
 
 
 if __name__=="__main__":
@@ -161,7 +161,7 @@ if __name__=="__main__":
             help="The relative path to the testting dataset folder")
     parser.add_argument("--val-prop", type=float, default=0.3,
             help="The validation proportion to split train and validation sets")
-    parser.add_argument("--model", type=str, choices=['dummy', 'restnet'], default="dummy",
+    parser.add_argument("--model", type=str, choices=['dummy', 'resnet'], default="dummy",
             help="Model name")
     parser.add_argument("--mode", type=str, choices=['opt', 'train', 'aug', 'test'], default="train",
             help="Execution mode: optmization (opt) | training (train) | augmentation (aug) | testing (test)")
@@ -192,8 +192,8 @@ if __name__=="__main__":
         # TODO add testing and save to csv with submission format
         config = {
             "kernel_size": 3,
-            "lr": 1e-3,
-            "batch_size": 16,
+            "lr": 5e-3,
+            "batch_size": 32,
         }
         test(config, args.test_folder, args.model, args.window, classes)
     else:
