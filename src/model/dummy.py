@@ -34,8 +34,6 @@ class DummyCNN(nn.Module):
         self.mlp.append(nn.Linear(in_size, out_size_[1]))
         self.mlp = nn.Sequential(*self.mlp)
         
-        self.softmax = nn.Softmax(dim=1)
-        
     def forward(self, x):
         for layer in self.convs:
             x = layer(x)
@@ -45,5 +43,4 @@ class DummyCNN(nn.Module):
         for layer in self.mlp:
             x = layer(x)
         
-        x = self.softmax(x)
         return x
