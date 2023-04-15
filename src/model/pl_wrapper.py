@@ -1,5 +1,5 @@
 import torch
-import lightning.pytorch as pl
+import pytorch_lightning as pl
 from torchmetrics.classification import MulticlassAccuracy
 
 
@@ -17,7 +17,6 @@ class PLWrapper(pl.LightningModule):
         self.model.train()
         x, y = batch
         x = x.float()
-        x = x.view(x.shape[0], x.shape[3], x.shape[1], x.shape[2])
         y_hat = self.model(x)
         loss = self.loss(y_hat, y)
         self.train_acc(y_hat, y)
@@ -29,7 +28,6 @@ class PLWrapper(pl.LightningModule):
         self.model.eval()
         x, y = batch
         x = x.float()
-        x = x.view(x.shape[0], x.shape[3], x.shape[1], x.shape[2])
         y_hat = self.model(x)
         val_loss = self.loss(y_hat, y)
         self.val_acc(y_hat, y)
@@ -40,7 +38,6 @@ class PLWrapper(pl.LightningModule):
         self.model.eval()
         x, y = batch
         x = x.float()
-        x = x.view(x.shape[0], x.shape[3], x.shape[1], x.shape[2])
         y_hat = self.model(x)
         y_label = torch.argmax(y_hat, dim=1)
         return y, y_label

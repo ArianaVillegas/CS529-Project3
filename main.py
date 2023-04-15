@@ -4,10 +4,11 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import models
 
-import lightning.pytorch as pl
+import pytorch_lightning as pl
+from sklearn.model_selection import train_test_split
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
-from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from ray import tune
 import pandas as pd
 import numpy as np
@@ -15,6 +16,7 @@ import Augmentor
 
 from src.datalaoder import SeedDataset
 from src.model import DummyCNN, PLWrapper
+from src.utils import create_train_meta, create_test_meta
 
 
 class _TuneReportCallback(TuneReportCallback, pl.Callback):
@@ -38,7 +40,7 @@ def augmentation(data_dir, tot_img):
         p.sample(tot_img - len(list_dir))
         
         
-def get_model(model_name, window_size):
+def get_model(config, model_name, window_size):
     in_size = [3, window_size, window_size]
     out_size = [1, 12]
     if model_name == "dummy":
@@ -46,7 +48,7 @@ def get_model(model_name, window_size):
         mlp = [1024, 64]
         model_ = DummyCNN(config, convs, mlp, in_size, out_size)
     elif model_name == "restnet":
-        model_ = models.resnet50(weights='IMAGENET1K_V1')
+        model_ = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         num_ftrs = model_.fc.in_features
         model_.fc = torch.nn.Sequential(
             torch.nn.Linear(num_ftrs, 256),
@@ -61,8 +63,10 @@ def get_model(model_name, window_size):
 
 def train(config, train_folder, val_prop, model_name, mode, window_size):
     # Read datasets
-    train_set = SeedDataset(data_dir=train_folder, mode='train', window_size=window_size)
-    train_set, val_set = torch.utils.data.random_split(train_set, [1-val_prop, val_prop])
+    meta = create_train_meta(train_folder)
+    train_meta, val_meta = train_test_split(meta, test_size=0.3, random_state=42, stratify=meta['idx'])
+    train_set = SeedDataset(meta=train_meta, mode='train', window_size=window_size, augmented=True)
+    val_set = SeedDataset(meta=val_meta, mode='val', window_size=window_size)
     
     # Create data loaders
     train_loader = DataLoader(train_set, shuffle=True, batch_size=config["batch_size"], num_workers=1)
@@ -81,7 +85,7 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
         callbacks += [_TuneReportCallback(metrics, on="validation_end")]
         progress_bar = False
     
-    model_ = get_model(model_name, window_size)
+    model_ = get_model(config, model_name, window_size)
     model = PLWrapper(config, model_, loss)
     trainer = pl.Trainer(
         max_epochs=100,
@@ -121,13 +125,14 @@ def opt(train_folder, val_prop, model_name, mode, window_size):
 
 def test(config, test_folder, model_name, window_size, classes):
     # Load test dataset
-    test_set = SeedDataset(data_dir=test_folder, mode='test', window_size=window_size)
+    meta = create_test_meta(test_folder)
+    test_set = SeedDataset(meta=meta, mode='test', window_size=window_size)
     test_loader = DataLoader(test_set, shuffle=False, batch_size=config["batch_size"], num_workers=1)
     
     # Load model checkpoint
     path = os.path.join(test_folder, f"../../lightning_logs/{model_name}.ckpt")
     checkpoint = torch.load(path)
-    model_ = get_model(model_name, window_size)
+    model_ = get_model(config, model_name, window_size)
     
     loss = nn.CrossEntropyLoss()
     model = PLWrapper(config, model_, loss)
