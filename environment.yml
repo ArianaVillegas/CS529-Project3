@@ -1,16 +1,21 @@
 name: ml
 channels:
+  - https://artifacts.voltrondata.run/artifactory/api/conda/theseus-nightly
+  - rapidsai
   - conda-forge
   - nvidia
   - nodefaults
 dependencies:
-  - pandas
-  - scikit-learn
   - numpy
-  - matplotlib
-  - scipy
+  - pytorch-cuda
+  - pandas
+  - augmentor
+  - ray
+  - torchaudio
+  - torchvision
+  - pytorch-lightning
+  - torchmetrics
+  - pillow
   - pytorch
-  - lightning
-  - pytorch-model-summary
-  - python=3.10
-  - ray-tune
+  - scikit-learn
+prefix: /home/ariana/mambaforge/envs/ml
