@@ -90,6 +90,7 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
     model_ = get_model(config, model_name, window_size)
     model = PLWrapper(config, model_, loss)
     trainer = pl.Trainer(
+        accelerator="gpu", devices=1,
         max_epochs=100,
         enable_progress_bar=progress_bar,
         callbacks=callbacks)
@@ -186,7 +187,7 @@ if __name__=="__main__":
     elif args.mode == 'train':
         config = {
             "kernel_size": 3,
-            "lr": 1e-3,
+            "lr": 5e-3,
             "batch_size": 16,
         }
         train(config, args.train_folder, args.val_prop, args.model, args.mode, args.window)
