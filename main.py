@@ -77,7 +77,7 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
     loss = nn.CrossEntropyLoss()
     
     callbacks = [
-        EarlyStopping(monitor="val/val_loss", mode="min", patience=10),
+        EarlyStopping(monitor="val/val_loss", mode="min", patience=30),
         ModelCheckpoint(dirpath=os.path.join(train_folder, "../../lightning_logs"), 
                         filename=f"{model_name}", save_top_k=1, monitor="val/val_loss")
     ]
@@ -91,7 +91,7 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
     model = PLWrapper(config, model_, loss)
     trainer = pl.Trainer(
         accelerator="gpu", devices=1,
-        max_epochs=100,
+        max_epochs=500,
         enable_progress_bar=progress_bar,
         callbacks=callbacks)
     
@@ -188,7 +188,7 @@ if __name__=="__main__":
         config = {
             "kernel_size": 3,
             "lr": 1e-3,
-            "batch_size": 16,
+            "batch_size": 8,
         }
         train(config, args.train_folder, args.val_prop, args.model, args.mode, args.window)
     elif args.mode == 'test':
