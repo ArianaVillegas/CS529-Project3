@@ -20,8 +20,8 @@ class PLWrapper(pl.LightningModule):
         x, y = batch
         x = x.float()
         y_hat = self.model(x)
-        y_hat = torch.softmax(y_hat, dim=1)
         loss = self.loss(y_hat, y)
+        y_hat = torch.softmax(y_hat, dim=1)
         self.train_acc(y_hat, y)
         self.train_f1(y_hat, y)
         self.log('train/train_loss', loss, on_step=False, on_epoch=True)
@@ -34,8 +34,8 @@ class PLWrapper(pl.LightningModule):
         x, y = batch
         x = x.float()
         y_hat = self.model(x)
-        y_hat = torch.softmax(y_hat, dim=1)
         val_loss = self.loss(y_hat, y)
+        y_hat = torch.softmax(y_hat, dim=1)
         self.val_acc(y_hat, y)
         self.val_f1(y_hat, y)
         self.log('val/val_loss', val_loss, on_step=False, on_epoch=True)

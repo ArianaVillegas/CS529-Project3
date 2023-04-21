@@ -187,7 +187,7 @@ if __name__=="__main__":
     elif args.mode == 'train':
         config = {
             "kernel_size": 3,
-            "lr": 5e-3,
+            "lr": 1e-3,
             "batch_size": 16,
         }
         train(config, args.train_folder, args.val_prop, args.model, args.mode, args.window)
