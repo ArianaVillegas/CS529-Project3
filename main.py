@@ -77,7 +77,7 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
     loss = nn.CrossEntropyLoss()
     
     callbacks = [
-        EarlyStopping(monitor="val/val_loss", mode="min", patience=30),
+        EarlyStopping(monitor="val/val_loss", mode="min", patience=50),
         ModelCheckpoint(dirpath=os.path.join(train_folder, "../../lightning_logs"), 
                         filename=f"{model_name}", save_top_k=1, monitor="val/val_loss")
     ]
