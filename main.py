@@ -1,4 +1,5 @@
 import os
+import csv
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -47,19 +48,39 @@ def get_model(config, model_name, window_size):
         convs = [16, 32, 32, 64, 64]
         mlp = [1024, 64]
         model_ = DummyCNN(config, convs, mlp, in_size, out_size)
-    elif model_name == "resnet":
-        model_ = models.resnet50(pretrained=True)
-        for param in model_.parameters():
-            param.requires_grad = False
-        num_ftrs = model_.fc.in_features
-        model_.fc = torch.nn.Sequential(
-            torch.nn.Linear(num_ftrs, 256),
-            torch.nn.ReLU(),
-            torch.nn.Dropout(0.4),
-            torch.nn.Linear(256, out_size[-1])
-        )
     else:
-        raise Exception(f"Model {model_name} not defined")
+        if model_name == "resnet":
+            model_ = models.resnet50(pretrained=True)
+            for param in model_.parameters():
+               param.requires_grad = False
+            num_ftrs = model_.fc.in_features
+            model_.fc = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 256),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.4),
+                torch.nn.Linear(256, out_size[-1])
+            )
+        elif model_name == "vgg16":
+            model_ = models.vgg16(pretrained=True)
+            for param in model_.parameters():
+               param.requires_grad = False
+            num_ftrs = model_.classifier[-1].in_features
+
+            # Replace last fully connected layer with custom layers
+            model_.classifier[-1] = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 256),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.4),
+                torch.nn.Linear(256, out_size[-1])
+            )    
+        elif model_name == "inceptionv3":
+           model_ = models.inception_v3(pretrained=True)
+        elif model_name == "efficientnetv2":
+           model_ = models.efficientnet_v2_s(pretrained=True)
+        else:
+            raise Exception(f"Model {model_name} not defined")
+
+        
     return model_
 
 
@@ -113,8 +134,8 @@ def opt(train_folder, val_prop, model_name, mode, window_size):
 
     analysis = tune.run(trainable,
                         resources_per_trial={
-                            "cpu": 1,
-                            "gpu": 0.5
+                            "cpu": 3,
+                            #"gpu": 0.5
                         },
                         metric="loss",
                         mode="min",
@@ -123,6 +144,7 @@ def opt(train_folder, val_prop, model_name, mode, window_size):
                         name="seeds")
 
     print(analysis.best_config)
+    return (analysis.best_config)
     
 
 def test(config, test_folder, model_name, window_size, classes):
@@ -164,7 +186,7 @@ if __name__=="__main__":
             help="The relative path to the testting dataset folder")
     parser.add_argument("--val-prop", type=float, default=0.3,
             help="The validation proportion to split train and validation sets")
-    parser.add_argument("--model", type=str, choices=['dummy', 'resnet'], default="dummy",
+    parser.add_argument("--model", type=str, choices=['dummy', 'resnet', 'vgg16', 'inceptionV3', 'efficientnetV2'], default="dummy",
             help="Model name")
     parser.add_argument("--mode", type=str, choices=['opt', 'train', 'aug', 'test'], default="train",
             help="Execution mode: optmization (opt) | training (train) | augmentation (aug) | testing (test)")
@@ -180,13 +202,31 @@ if __name__=="__main__":
     classes = np.asarray(os.listdir(args.train_folder))
     
     if args.mode == 'opt':
-        opt(args.train_folder, args.val_prop, args.model, args.mode, args.window)
+        best_config= opt(args.train_folder, args.val_prop, args.model, args.mode, args.window)
+        model_name = args.model
+        with open("hyperparameters.csv", mode="a+", newline="") as file:
+            writer = csv.writer(file)
+            # Check if the model already exists in the CSV file
+            file.seek(0)  # Move the file pointer to the beginning of the file
+            reader = csv.reader(file)
+            for row in reader:
+                if row[0] == model_name:
+                    # Update the existing row with the new hyperparameters
+                    row[1] = best_config["kernel_size"]
+                    row[2] = best_config["lr"]
+                    row[3] = best_config["batch_size"]
+                    break
+                else:
+                    # Create a new row for the model if it doesn't exist
+                    row = [model_name, best_config["kernel_size"], best_config["lr"], best_config["batch_size"]]
+                    writer.writerow(row)
+                    
     elif args.mode == 'aug':
         augmentation(args.train_folder, args.augmentation)
     elif args.mode == 'train':
         config = {
             "kernel_size": 3,
-            "lr": 1e-3,
+            "lr": 5e-3,
             "batch_size": 16,
         }
         train(config, args.train_folder, args.val_prop, args.model, args.mode, args.window)
