@@ -28,21 +28,21 @@ Typical Usage Example:
 
 Options:
 
-  -h, --help            show this help message and exit
-  --train-folder TRAIN_FOLDER
+	-h, --help            show this help message and exit
+	--train-folder TRAIN_FOLDER
                         The relative path to the training dataset folder
-  --test-folder TEST_FOLDER
+	--test-folder TEST_FOLDER
                         The relative path to the testting dataset folder
-  --val-prop VAL_PROP   The validation proportion to split train and
+	--val-prop VAL_PROP   The validation proportion to split train and
                         validation sets
-  --model {dummy,resnet,vgg16,inceptionV3,efficientnetV2}
+  	--model {dummy,resnet,vgg16,inceptionV3,efficientnetV2}
                         Model name
-  --mode {opt,train,aug,test}
+  	--mode {opt,train,aug,test}
                         Execution mode: optmization (opt) | training (train) |
                         augmentation (aug) | testing (test)
-  --window WINDOW       Window size
-  --augmentation AUGMENTATION
-                        Data augmentation size per class
+  	--window WINDOW       Window size
+  	--augmentation AUGMENTATION
+        	Data augmentation size per class
 
 	
 
