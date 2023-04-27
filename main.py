@@ -1,5 +1,6 @@
 import os
 import csv
+import timm
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -55,10 +56,10 @@ def get_model(config, model_name, window_size):
                param.requires_grad = False
             num_ftrs = model_.fc.in_features
             model_.fc = torch.nn.Sequential(
-                torch.nn.Linear(num_ftrs, 256),
+                torch.nn.Linear(num_ftrs, 224),
                 torch.nn.ReLU(),
                 torch.nn.Dropout(0.4),
-                torch.nn.Linear(256, out_size[-1])
+                torch.nn.Linear(224, out_size[-1])
             )
         elif model_name == "vgg16":
             model_ = models.vgg16(pretrained=True)
@@ -68,15 +69,40 @@ def get_model(config, model_name, window_size):
 
             # Replace last fully connected layer with custom layers
             model_.classifier[-1] = torch.nn.Sequential(
-                torch.nn.Linear(num_ftrs, 256),
+                torch.nn.Linear(num_ftrs, 224),
                 torch.nn.ReLU(),
                 torch.nn.Dropout(0.4),
-                torch.nn.Linear(256, out_size[-1])
+                torch.nn.Linear(224, out_size[-1])
             )    
-        elif model_name == "inceptionv3":
-           model_ = models.inception_v3(pretrained=True)
-        elif model_name == "efficientnetv2":
-           model_ = models.efficientnet_v2_s(pretrained=True)
+        elif model_name == "inceptionV3":
+            model_ = models.inception_v3(pretrained=True)
+            for param in model_.parameters():
+               param.requires_grad = False
+            num_ftrs = model_.AuxLogits.fc.in_features
+            model_.AuxLogits.fc = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 299),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.4),
+                torch.nn.Linear(299, out_size[-1])
+            )    
+            num_ftrs = model_.fc.in_features
+            model_.fc = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 299),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.4),
+                torch.nn.Linear(299, out_size[-1])
+            )    
+        elif model_name == "efficientnetV2":
+            model_ = timm.create_model('tf_efficientnetv2_s', pretrained=True)
+            for param in model_.parameters():
+               param.requires_grad = False
+            num_ftrs = model_.classifier.in_features
+            model_.classifier= torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 224),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.4),
+                torch.nn.Linear(224, out_size[-1])
+            )    
         else:
             raise Exception(f"Model {model_name} not defined")
 
@@ -98,7 +124,7 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
     loss = nn.CrossEntropyLoss()
     
     callbacks = [
-        EarlyStopping(monitor="val/val_loss", mode="min", patience=10),
+        EarlyStopping(monitor="val/val_loss", mode="min", patience=50),
         ModelCheckpoint(dirpath=os.path.join(train_folder, "../../lightning_logs"), 
                         filename=f"{model_name}", save_top_k=1, monitor="val/val_loss")
     ]
@@ -111,7 +137,9 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
     model_ = get_model(config, model_name, window_size)
     model = PLWrapper(config, model_, loss)
     trainer = pl.Trainer(
-        max_epochs=100,
+        accelerator="auto",
+        devices=1,
+        max_epochs=500,
         enable_progress_bar=progress_bar,
         callbacks=callbacks)
     
@@ -204,38 +232,47 @@ if __name__=="__main__":
     if args.mode == 'opt':
         best_config= opt(args.train_folder, args.val_prop, args.model, args.mode, args.window)
         model_name = args.model
-        with open("hyperparameters.csv", mode="a+", newline="") as file:
+        with open("parameters.csv", mode="a+", newline="") as file:
             writer = csv.writer(file)
-            # Check if the model already exists in the CSV file
-            file.seek(0)  # Move the file pointer to the beginning of the file
+            file.seek(0)
             reader = csv.reader(file)
             for row in reader:
                 if row[0] == model_name:
-                    # Update the existing row with the new hyperparameters
                     row[1] = best_config["kernel_size"]
                     row[2] = best_config["lr"]
                     row[3] = best_config["batch_size"]
                     break
                 else:
-                    # Create a new row for the model if it doesn't exist
                     row = [model_name, best_config["kernel_size"], best_config["lr"], best_config["batch_size"]]
                     writer.writerow(row)
                     
     elif args.mode == 'aug':
         augmentation(args.train_folder, args.augmentation)
     elif args.mode == 'train':
-        config = {
-            "kernel_size": 3,
-            "lr": 5e-3,
-            "batch_size": 16,
-        }
+        with open('parameters.csv', 'r') as file:
+            csv_reader = csv.reader(file)
+            header = next(csv_reader)  
+            for row in csv_reader:
+                if row[0] == args.model:
+                    config = {
+                        "kernel_size": int(row[1]),
+                        "lr": float(row[2]),
+                        "batch_size": int(row[3]),
+                    }
+                    break 
         train(config, args.train_folder, args.val_prop, args.model, args.mode, args.window)
     elif args.mode == 'test':
-        config = {
-            "kernel_size": 3,
-            "lr": 5e-3,
-            "batch_size": 32,
-        }
+        with open('parameters.csv', 'r') as file:
+            csv_reader = csv.reader(file)
+            header = next(csv_reader)  
+            for row in csv_reader:
+                if row[0] == args.model:
+                    config = {
+                        "kernel_size": int(row[1]),
+                        "lr": float(row[2]),
+                        "batch_size": int(row[3]),
+                    }
+                    break 
         test(config, args.test_folder, args.model, args.window, classes)
     else:
         raise Exception("Execution mode not defined")
