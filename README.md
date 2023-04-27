@@ -14,6 +14,14 @@ Integrantes
 - EfficientNetV2
 
 
+### Prerequisites
+
+You need to install activate the following conda environment 
+```sh
+	conda env create -n project3 -f environment.yml
+	conda activate project3
+```
+
 
 
 ## Usage ##
