@@ -16,7 +16,7 @@ Integrantes
 
 ### Prerequisites
 
-You need to install activate the following conda environment 
+You need to install and activate the following conda environment 
 ```sh
 conda env create -n project3 -f environment.yml
 conda activate project3
