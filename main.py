@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from torchvision import models
 
 import pytorch_lightning as pl
+from pytorch_lightning.loggers.csv_logs import CSVLogger
 from sklearn.model_selection import train_test_split
 from ray.tune.integration.pytorch_lightning import TuneReportCallback
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
@@ -55,12 +56,7 @@ def get_model(config, model_name, window_size):
             for param in model_.parameters():
                param.requires_grad = False
             num_ftrs = model_.fc.in_features
-            model_.fc = torch.nn.Sequential(
-                torch.nn.Linear(num_ftrs, 224),
-                torch.nn.ReLU(),
-                torch.nn.Dropout(0.4),
-                torch.nn.Linear(224, out_size[-1])
-            )
+            model_.fc = torch.nn.Linear(num_ftrs, out_size[-1])
         elif model_name == "vgg16":
             model_ = models.vgg16(pretrained=True)
             for param in model_.parameters():
@@ -68,41 +64,21 @@ def get_model(config, model_name, window_size):
             num_ftrs = model_.classifier[-1].in_features
 
             # Replace last fully connected layer with custom layers
-            model_.classifier[-1] = torch.nn.Sequential(
-                torch.nn.Linear(num_ftrs, 224),
-                torch.nn.ReLU(),
-                torch.nn.Dropout(0.4),
-                torch.nn.Linear(224, out_size[-1])
-            )    
+            model_.classifier[-1] = torch.nn.Linear(num_ftrs, out_size[-1])
         elif model_name == "inceptionV3":
             model_ = models.inception_v3(pretrained=True)
             for param in model_.parameters():
                param.requires_grad = False
             num_ftrs = model_.AuxLogits.fc.in_features
-            model_.AuxLogits.fc = torch.nn.Sequential(
-                torch.nn.Linear(num_ftrs, 299),
-                torch.nn.ReLU(),
-                torch.nn.Dropout(0.4),
-                torch.nn.Linear(299, out_size[-1])
-            )    
+            model_.AuxLogits.fc = torch.nn.Linear(num_ftrs, out_size[-1])
             num_ftrs = model_.fc.in_features
-            model_.fc = torch.nn.Sequential(
-                torch.nn.Linear(num_ftrs, 299),
-                torch.nn.ReLU(),
-                torch.nn.Dropout(0.4),
-                torch.nn.Linear(299, out_size[-1])
-            )    
+            model_.fc = torch.nn.Linear(num_ftrs, out_size[-1])
         elif model_name == "efficientnetV2":
             model_ = timm.create_model('tf_efficientnetv2_s', pretrained=True)
             for param in model_.parameters():
                param.requires_grad = False
             num_ftrs = model_.classifier.in_features
-            model_.classifier= torch.nn.Sequential(
-                torch.nn.Linear(num_ftrs, 224),
-                torch.nn.ReLU(),
-                torch.nn.Dropout(0.4),
-                torch.nn.Linear(224, out_size[-1])
-            )    
+            model_.classifier= torch.nn.Linear(num_ftrs, out_size[-1])
         else:
             raise Exception(f"Model {model_name} not defined")
 
@@ -121,24 +97,31 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
     train_loader = DataLoader(train_set, shuffle=True, batch_size=config["batch_size"], num_workers=1)
     val_loader = DataLoader(val_set, shuffle=False, batch_size=config["batch_size"], num_workers=1)
     
-    loss = nn.CrossEntropyLoss()
     
     callbacks = [
         EarlyStopping(monitor="val/val_loss", mode="min", patience=50),
         ModelCheckpoint(dirpath=os.path.join(train_folder, "../../lightning_logs"), 
                         filename=f"{model_name}", save_top_k=1, monitor="val/val_loss")
+        
     ]
     metrics = {"loss": "val/val_loss", "acc": "val/val_acc", "f1": "val/val_f1"}
     progress_bar = True
+    
     if mode == "opt":
         callbacks += [_TuneReportCallback(metrics, on="validation_end")]
         progress_bar = False
     
     model_ = get_model(config, model_name, window_size)
-    model = PLWrapper(config, model_, loss)
+
+    
+    loss = nn.CrossEntropyLoss()
+    
+
+    model = PLWrapper(config, model_, loss, model_name)
     trainer = pl.Trainer(
         accelerator="auto",
         devices=1,
+        logger= CSVLogger('./logs/', name=model_name, version='0'),
         max_epochs=500,
         enable_progress_bar=progress_bar,
         callbacks=callbacks)
@@ -184,7 +167,7 @@ def test(config, test_folder, model_name, window_size, classes):
     # Build model
     model_ = get_model(config, model_name, window_size)
     loss = nn.CrossEntropyLoss()
-    model = PLWrapper(config, model_, loss)
+    model = PLWrapper(config, model_, loss, model_name)
     
     # Load model checkpoint
     path = os.path.join(test_folder, f"../../lightning_logs/{model_name}.ckpt")

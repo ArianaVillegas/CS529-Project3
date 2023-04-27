@@ -4,7 +4,7 @@ from torchvision import transforms
 
 
 class SeedDataset(Dataset):
-    def __init__(self, meta, mode='train', window_size=256, augmented=False):
+    def __init__(self, meta, mode='train', window_size=224, augmented=False):
         self.meta = meta
         self.mode = mode
         self.window_size = window_size

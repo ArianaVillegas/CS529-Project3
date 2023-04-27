@@ -4,8 +4,9 @@ from torchmetrics.classification import MulticlassAccuracy, MulticlassF1Score, M
 
 
 class PLWrapper(pl.LightningModule):
-    def __init__(self, config, model, loss):
+    def __init__(self, config, model, loss, model_name):
         super().__init__()
+        self.model_name = model_name
         self.config = config
         self.model = model
         self.loss = loss
@@ -29,8 +30,16 @@ class PLWrapper(pl.LightningModule):
         self.model.train()
         x, y = batch
         x = x.float()
-        y_hat = self.model(x)
-        loss = self.loss(y_hat, y)
+
+        
+        if self.model_name == "inceptionV3":
+            y_hat, y_hat_aux = self.model(x)
+            loss1 = self.loss(y_hat, y)
+            loss2 = self.loss(y_hat_aux, y)
+            loss = loss1 + 0.4 * loss2
+        else:
+            y_hat = self.model(x)
+            loss = self.loss(y_hat, y)
         y_hat = torch.softmax(y_hat, dim=1)
         self.train_acc(y_hat, y)
         self.train_f1(y_hat, y)
@@ -41,12 +50,20 @@ class PLWrapper(pl.LightningModule):
         self.log('train/train_f1', self.train_f1, on_step=False, on_epoch=True)
         self.log('train/train_precision', self.train_precision, on_step=False, on_epoch=True)
         self.log('train/train_recall', self.train_recall, on_step=False, on_epoch=True)
+
         return loss
 
     def validation_step(self, batch, batch_idx):
         self.model.eval()
         x, y = batch
         x = x.float()
+        #if self.model_name == "inceptionV3":
+        #    print(type(self.model(x)))
+        #    y_hat, y_hat_aux = self.model(x)
+        #    loss1 = self.loss(y_hat, y)
+        #    loss2 = self.loss(y_hat_aux, y)
+        #    val_loss = loss1 + 0.4 * loss2
+        #else:
         y_hat = self.model(x)
         val_loss = self.loss(y_hat, y)
         y_hat = torch.softmax(y_hat, dim=1)
