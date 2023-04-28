@@ -10,7 +10,6 @@ class PLWrapper(pl.LightningModule):
         self.config = config
         self.model = model
         self.loss = loss
-        # TODO Generalize to n output classes
 
         # Accuraction for train and validation 
         self.train_acc = MulticlassAccuracy(num_classes=12)
@@ -31,7 +30,6 @@ class PLWrapper(pl.LightningModule):
         x, y = batch
         x = x.float()
 
-        
         if self.model_name == "inceptionV3":
             y_hat, y_hat_aux = self.model(x)
             loss1 = self.loss(y_hat, y)
@@ -40,6 +38,7 @@ class PLWrapper(pl.LightningModule):
         else:
             y_hat = self.model(x)
             loss = self.loss(y_hat, y)
+        
         y_hat = torch.softmax(y_hat, dim=1)
         self.train_acc(y_hat, y)
         self.train_f1(y_hat, y)
@@ -57,13 +56,6 @@ class PLWrapper(pl.LightningModule):
         self.model.eval()
         x, y = batch
         x = x.float()
-        #if self.model_name == "inceptionV3":
-        #    print(type(self.model(x)))
-        #    y_hat, y_hat_aux = self.model(x)
-        #    loss1 = self.loss(y_hat, y)
-        #    loss2 = self.loss(y_hat_aux, y)
-        #    val_loss = loss1 + 0.4 * loss2
-        #else:
         y_hat = self.model(x)
         val_loss = self.loss(y_hat, y)
         y_hat = torch.softmax(y_hat, dim=1)

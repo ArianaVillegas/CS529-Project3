@@ -8,8 +8,12 @@ def create_train_meta(data_dir):
     for idx, label in enumerate(list_dir):
         class_folder = os.path.join(data_dir, label)
         list_dir = os.listdir(class_folder)
+        for name in os.listdir(class_folder):
+            if name == 'output':
+                list_dir += [os.path.join(name, sub) for sub in os.listdir(os.path.join(class_folder, name))]
         for name in list_dir:
-            rows.append([os.path.join(class_folder, name), label, idx])
+            if name.endswith('.png'):
+                rows.append([os.path.join(class_folder, name), label, idx])
     df = pd.DataFrame(rows, columns=['path', 'label', 'idx'])
     return df
 

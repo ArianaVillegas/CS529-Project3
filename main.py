@@ -58,12 +58,10 @@ def get_model(config, model_name, window_size):
             num_ftrs = model_.fc.in_features
             model_.fc = torch.nn.Linear(num_ftrs, out_size[-1])
         elif model_name == "vgg16":
-            model_ = models.vgg16(pretrained=True)
+            model_ = models.vgg16_bn(pretrained=True)
             for param in model_.parameters():
                param.requires_grad = False
             num_ftrs = model_.classifier[-1].in_features
-
-            # Replace last fully connected layer with custom layers
             model_.classifier[-1] = torch.nn.Linear(num_ftrs, out_size[-1])
         elif model_name == "inceptionV3":
             model_ = models.inception_v3(pretrained=True)
@@ -94,13 +92,13 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
     val_set = SeedDataset(meta=val_meta, mode='val', window_size=window_size)
     
     # Create data loaders
-    train_loader = DataLoader(train_set, shuffle=True, batch_size=config["batch_size"], num_workers=1)
-    val_loader = DataLoader(val_set, shuffle=False, batch_size=config["batch_size"], num_workers=1)
+    train_loader = DataLoader(train_set, shuffle=True, batch_size=config["batch_size"], num_workers=2)
+    val_loader = DataLoader(val_set, shuffle=False, batch_size=config["batch_size"], num_workers=2)
     
     
     callbacks = [
-        EarlyStopping(monitor="val/val_loss", mode="min", patience=50),
-        ModelCheckpoint(dirpath=os.path.join(train_folder, "../../lightning_logs"), 
+        EarlyStopping(monitor="val/val_loss", mode="min", patience=20),
+        ModelCheckpoint(dirpath=os.path.join(train_folder, "../../logs"), 
                         filename=f"{model_name}", save_top_k=1, monitor="val/val_loss")
         
     ]
@@ -131,8 +129,8 @@ def train(config, train_folder, val_prop, model_name, mode, window_size):
 
 def opt(train_folder, val_prop, model_name, mode, window_size):
     config = {
-        "kernel_size": tune.choice([3, 5]),
-        "lr": tune.loguniform(1e-4, 5e-3),
+        "kernel_size": tune.choice([3]),
+        "lr": tune.loguniform(1e-5, 1e-2),
         "batch_size": tune.choice([8, 16, 32]),
     }
 
@@ -145,8 +143,8 @@ def opt(train_folder, val_prop, model_name, mode, window_size):
 
     analysis = tune.run(trainable,
                         resources_per_trial={
-                            "cpu": 3,
-                            #"gpu": 0.5
+                            "cpu": 2,
+                            "gpu": 0.25
                         },
                         metric="loss",
                         mode="min",
@@ -170,7 +168,7 @@ def test(config, test_folder, model_name, window_size, classes):
     model = PLWrapper(config, model_, loss, model_name)
     
     # Load model checkpoint
-    path = os.path.join(test_folder, f"../../lightning_logs/{model_name}.ckpt")
+    path = os.path.join(test_folder, f"../../logs/{model_name}.ckpt")
     checkpoint = torch.load(path)
     model.load_state_dict(checkpoint['state_dict'])
     
