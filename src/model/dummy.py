@@ -7,6 +7,7 @@ class DummyCNN(nn.Module):
         super(DummyCNN, self).__init__()
         self.config = config
         
+        # Create convolutional layers with specified sizes and configurations
         self.convs = []
         in_size = in_size_[0]
         for out_size in convs:
@@ -20,8 +21,10 @@ class DummyCNN(nn.Module):
             in_size = out_size
         self.convs = nn.Sequential(*self.convs)
         
+        # Flatten convolutional output for use in MLP
         self.flatten = nn.Flatten()
         
+        # Create MLP layers with specified sizes and configurations
         self.mlp = []
         in_size = convs[-1] * (in_size_[1] // (2**(len(convs)))) ** 2
         for out_size in mlp:
@@ -35,11 +38,14 @@ class DummyCNN(nn.Module):
         self.mlp = nn.Sequential(*self.mlp)
         
     def forward(self, x):
+        # Apply convolutional layers sequentially to input tensor
         for layer in self.convs:
             x = layer(x)
         
+        # Flatten convolutional output for use in MLP
         x = self.flatten(x)
         
+        # Apply MLP layers sequentially to flattened tensor
         for layer in self.mlp:
             x = layer(x)
         
